@@ -230,6 +230,7 @@ class profile:
         self.with_stack = with_stack
         self.with_modules = with_modules
         self.use_cpu = use_cpu
+        self.acc_events = False
         if experimental_config is None:
             experimental_config = _ExperimentalConfig()
         self.experimental_config = experimental_config
@@ -341,15 +342,12 @@ class profile:
             if hasattr(device_module, "synchronize"):
                 device_module.synchronize()
 
-        old_function_events: Optional[EventList] = None
         if self.function_events:
             self.old_function_events = self.function_events
+        self.function_events = None
 
         t0 = perf_counter_ns()
 
-        # TODO we are overwriting previous kineto results here
-        # Should combine previous results with the new results otherwise only
-        # the last "repeat" will be recorded in the trace
         self.kineto_results = _disable_profiler()
         t1 = perf_counter_ns()
         self._stats.profiler_disable_call_duration_us = int((t1 - t0) / 1000)
@@ -360,6 +358,8 @@ class profile:
         self._stats.profiling_window_duration_sec = (
             (self.profiling_end_time_ns - self.profiling_start_time_ns) * 1.0 / 1e9
         )
+        if self.acc_events:
+            self._ensure_function_events()
         return False
 
     def __repr__(self):
@@ -394,7 +394,7 @@ class profile:
         self._stats.function_events_build_tree_call_duration_us = int((t1 - t0) / 1000)
         self._stats.number_of_events = len(self.function_events)
 
-        if self.old_function_events:
+        if self.old_function_events and self.acc_events:
             for evt in self.old_function_events:
                 self.function_events.append(evt)
             self.old_function_events = None
